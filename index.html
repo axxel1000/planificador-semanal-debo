@@ -169,67 +169,45 @@
     .day-date { font-size: clamp(0.75rem, 1.2vw, 0.88rem); font-weight: 700; color: var(--task-text); }
 
     .task-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
+      display: block;
+      width: 100%;
+      padding: 0;
       overflow-y: auto;
+      border: none;
     }
 
-    .is-weekday .task-list { height: 196px; }
-    .is-weekend .task-list { height: 84px; }
+    .is-weekday .task-list { height: 196px; min-height: 196px; }
+    .is-weekend .task-list { height: 84px; min-height: 84px; }
 
-    .task-row {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      border-bottom: var(--line-width) var(--line-style, dashed) var(--line-color);
-      padding: 1px 0;
-      height: var(--task-row-height);
-      min-height: var(--task-row-height);
-      box-sizing: border-box;
-    }
-
-    .task-checkbox {
-      width: 14px;
-      height: 14px;
-      accent-color: var(--completed-color);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .task-input {
-      flex: 1;
+    .day-textarea {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      resize: none;
+      overflow-y: auto;
       border: none;
       outline: none;
-      background: transparent;
-      font-size: var(--base-font-size);
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      background-color: transparent;
+      background-image: repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(var(--task-row-height) - var(--line-width)),
+        var(--line-color) calc(var(--task-row-height) - var(--line-width)),
+        var(--line-color) var(--task-row-height)
+      );
+      background-attachment: local;
       color: var(--task-text);
+      font-size: var(--base-font-size);
       font-family: inherit;
-      width: 100%;
+      line-height: var(--task-row-height);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      box-sizing: border-box;
     }
-
-    .task-input.completed {
-      color: var(--completed-color);
-      font-weight: 600;
-      text-decoration: none;
-    }
-
-    .task-status-emoji {
-      font-size: 0.75rem;
-      flex-shrink: 0;
-      line-height: 1;
-    }
-
-    .btn-del {
-      background: transparent;
-      color: #555555;
-      border: none;
-      font-size: 0.85rem;
-      padding: 0 2px;
-      cursor: pointer;
-    }
-
-    .btn-del:hover { color: #ef4444; }
 
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: var(--app-bg); }
@@ -762,7 +740,7 @@
           <label class="setting-row">Borde de los días <input type="color" data-setting="dayBorder"></label>
           <label class="setting-row">Fondo del encabezado <input type="color" data-setting="headerBg"></label>
           <label class="setting-row">Línea de encabezado <input type="color" data-setting="dayHeaderLine"></label>
-          <label class="setting-row">Color de renglones <input type="color" data-setting="lineColor"></label>
+          <label class="setting-row">Color de líneas decorativas <input type="color" data-setting="lineColor"></label>
           <label class="setting-row">Texto de tareas <input type="color" data-setting="taskText"></label>
           <label class="setting-row">Tareas completadas <input type="color" data-setting="completedColor"></label>
           <label class="setting-row">Borde de "hoy" <input type="color" data-setting="todayBorder"></label>
@@ -797,17 +775,17 @@
       </details>
 
       <details class="settings-section" open>
-        <summary>📏 Renglones y bordes</summary>
+        <summary>📏 Líneas y bordes</summary>
         <div class="settings-body">
           <label class="setting-row">
-            Espesor de renglón
+            Espesor de línea
             <span>
               <input type="range" min="1" max="4" step="1" data-setting="lineWidth">
               <span class="range-value" id="lineWidthValue"></span>
             </span>
           </label>
           <label class="setting-row">
-            Alto de renglón
+            Separación entre líneas
             <span>
               <input type="range" min="22" max="42" step="1" data-setting="taskRowHeight">
               <span class="range-value" id="taskRowHeightValue"></span>
@@ -821,7 +799,7 @@
             </span>
           </label>
           <label class="setting-row">
-            Estilo de renglón
+            Estilo de línea
             <select data-setting="lineStyle">
               <option value="dashed">Discontinuo</option>
               <option value="solid">Continuo</option>
@@ -981,49 +959,14 @@
       });
     }
 
-    function getDayTasks(key, isWeekend = false) {
+    function getDayText(key) {
       const data = window.db[key];
-      let tasks = [];
-
-      if (data) {
-        if (typeof data === "string") {
-          const lines =
-            data
-              .split("\n")
-              .filter(l => l.trim() !== "");
-
-          tasks = lines.map(l => ({
-            text: l.replace(/^[-X*]\s*/, ""),
-            done: false
-          }));
-
-        } else if (Array.isArray(data)) {
-          tasks = data.map(t =>
-            typeof t === "string"
-              ? { text: t, done: false }
-              : {
-                  text: t.text || "",
-                  done: !!t.done
-                }
-          );
-        }
+      if (typeof data === "string") return data;
+      if (Array.isArray(data)) {
+        // Compatibilidad con datos anteriores; conserva los espacios vacíos.
+        return data.map(item => typeof item === "string" ? item : String(item?.text || "")).join("\\n");
       }
-
-      const targetLength =
-        isWeekend ? 6 : 10;
-
-      if (tasks.length > targetLength) {
-        tasks = tasks.slice(0, targetLength);
-      } else {
-        while (tasks.length < targetLength) {
-          tasks.push({
-            text: "",
-            done: false
-          });
-        }
-      }
-
-      return tasks;
+      return "";
     }
 
     function escapeHtml(str) {
@@ -1077,50 +1020,7 @@
         return card;
       }
 
-      const tasks =
-        getDayTasks(
-          dayInfo.dateKey,
-          isWeekend
-        );
-
-      const rowsHtml =
-        tasks.map((t, index) => {
-
-          const emojiHtml =
-            t.done
-              ? `<span class="task-status-emoji" title="Cumplida">🌸</span>`
-              : "";
-
-          return `
-            <div class="task-row">
-
-              <input
-                type="checkbox"
-                class="task-checkbox"
-                ${t.done ? "checked" : ""}
-                onchange="toggleTask('${dayInfo.dateKey}', ${index}, ${isWeekend})"
-              >
-
-              <input
-                type="text"
-                class="task-input ${t.done ? "completed" : ""}"
-                value="${escapeHtml(t.text)}"
-                onfocus="window.handleFocus()"
-                onblur="window.handleBlur()"
-                oninput="updateTaskText('${dayInfo.dateKey}', ${index}, this.value, ${isWeekend})"
-                onkeydown="handleKeyDown(event, '${dayInfo.dateKey}', ${index})"
-              >
-
-              ${emojiHtml}
-
-              <button
-                class="btn-del"
-                onclick="deleteTask('${dayInfo.dateKey}', ${index}, ${isWeekend})"
-              >🗑</button>
-
-            </div>
-          `;
-        }).join("");
+      const dayText = getDayText(dayInfo.dateKey);
 
       card.innerHTML = `
         <div class="day-header">
@@ -1133,11 +1033,15 @@
           <button type="button" class="btn-outline" title="Pegar en este día" onclick="pasteDayContent('${dayInfo.dateKey}', ${isWeekend})">📥 Pegar</button>
         </div>
 
-        <div
-          class="task-list"
-          id="list_${dayInfo.dateKey}"
-        >
-          ${rowsHtml}
+        <div class="task-list" id="list_${dayInfo.dateKey}">
+          <textarea
+            class="day-textarea"
+            aria-label="Contenido de ${dayName}"
+            spellcheck="false"
+            onfocus="window.handleFocus()"
+            onblur="window.handleBlur()"
+            oninput="updateDayText('${dayInfo.dateKey}', this.value)"
+          >${escapeHtml(dayText)}</textarea>
         </div>
       `;
 
@@ -1263,93 +1167,21 @@
       );
     };
 
-    function updateTaskText(
-      key,
-      index,
-      text,
-      isWeekend = false
-    ) {
-      const tasks =
-        getDayTasks(key, isWeekend);
-
-      tasks[index].text = text;
-
-      window.db[key] = tasks;
-
-      localStorage.setItem(
-        "weekly_planner_v5_db",
-        JSON.stringify(window.db)
-      );
-
-      // Guarda solamente este día.
-      if (window.saveDayToCloud) {
-        window.saveDayToCloud(key);
-      }
+    function updateDayText(key, text) {
+      window.db[key] = text;
+      localStorage.setItem("weekly_planner_v5_db", JSON.stringify(window.db));
+      if (window.saveDayToCloud) window.saveDayToCloud(key);
     }
 
-    function toggleTask(
-      key,
-      index,
-      isWeekend = false
-    ) {
-      const tasks =
-        getDayTasks(key, isWeekend);
-
-      tasks[index].done =
-        !tasks[index].done;
-
-      window.db[key] = tasks;
-
-      localStorage.setItem(
-        "weekly_planner_v5_db",
-        JSON.stringify(window.db)
-      );
-
-      if (window.saveDayToCloud) {
-        window.saveDayToCloud(key);
-      }
-
-      renderPlanner();
-    }
-
-    function deleteTask(
-      key,
-      index,
-      isWeekend = false
-    ) {
-      const tasks =
-        getDayTasks(key, isWeekend);
-
-      tasks[index] = {
-        text: "",
-        done: false
-      };
-
-      window.db[key] = tasks;
-
-      localStorage.setItem(
-        "weekly_planner_v5_db",
-        JSON.stringify(window.db)
-      );
-
-      if (window.saveDayToCloud) {
-        window.saveDayToCloud(key);
-      }
-
-      renderPlanner();
-    }
-
-    // Copiar y pegar contenido completo entre días.
-    // Se usa localStorage como portapapeles interno para que funcione
-    // también cuando el HTML se abre como archivo local o en móvil.
-    const PLANNER_CLIPBOARD_KEY = "planner_internal_clipboard_v5";
+    // Copiar y pegar el texto completo de un día.
+    const PLANNER_CLIPBOARD_KEY = "planner_internal_clipboard_v6";
 
     function getPlannerClipboard() {
       try {
         const raw = localStorage.getItem(PLANNER_CLIPBOARD_KEY);
         if (!raw) return null;
         const data = JSON.parse(raw);
-        if (!data || data.type !== "planificador-dia-v2" || !Array.isArray(data.tasks)) return null;
+        if (!data || data.type !== "planificador-dia-texto-v1" || typeof data.text !== "string") return null;
         return data;
       } catch (e) {
         return null;
@@ -1369,112 +1201,33 @@
 
     window.plannerClipboard = getPlannerClipboard();
 
-    function copyDayContent(key, isWeekend = false) {
-      const tasks = getDayTasks(key, isWeekend);
-      // Copia únicamente lo que realmente está cargado, manteniendo
-      // el orden de los renglones. Un día con 1, 2 o todos los renglones funciona igual.
-      const loadedTasks = tasks
-        .map((task, index) => ({
-          originalIndex: index,
-          text: String(task?.text || ""),
-          done: !!task?.done
-        }))
-        .filter(task => task.text.trim() !== "");
-
-      if (!loadedTasks.length) {
-        setPlannerSyncStatus?.("⚠️ Este día no tiene contenido para copiar", "error");
+    function copyDayContent(key) {
+      const text = getDayText(key);
+      if (!text.trim()) {
+        window.setPlannerSyncStatus?.("⚠️ Este día no tiene contenido para copiar", "error");
         return false;
       }
-
-      const payload = {
-        type: "planificador-dia-v2",
-        source: key,
-        tasks: loadedTasks
-      };
-
+      const payload = { type: "planificador-dia-texto-v1", source: key, text };
       if (!setPlannerClipboard(payload)) {
-        setPlannerSyncStatus?.("⚠️ No se pudo copiar el día", "error");
+        window.setPlannerSyncStatus?.("⚠️ No se pudo copiar el día", "error");
         return false;
       }
-
-      setPlannerSyncStatus?.(
-        `📋 ${loadedTasks.length} renglón${loadedTasks.length === 1 ? "" : "es"} copiado${loadedTasks.length === 1 ? "" : "s"}`,
-        "online"
-      );
+      window.setPlannerSyncStatus?.("📋 Día copiado", "online");
       return true;
     }
 
-    function pasteDayContent(key, isWeekend = false) {
+    function pasteDayContent(key) {
       const payload = getPlannerClipboard() || window.plannerClipboard;
-
-      if (!payload || payload.type !== "planificador-dia-v2" || !Array.isArray(payload.tasks) || !payload.tasks.length) {
-        setPlannerSyncStatus?.("⚠️ Primero copiá un día con contenido", "error");
+      if (!payload || payload.type !== "planificador-dia-texto-v1" || typeof payload.text !== "string") {
+        window.setPlannerSyncStatus?.("⚠️ Primero copiá un día con contenido", "error");
         return false;
       }
-
-      const current = getDayTasks(key, isWeekend);
-      const maxRows = current.length;
-      const result = current.map(task => ({ text: String(task?.text || ""), done: !!task?.done }));
-      let targetIndex = 0;
-
-      // Pega desde el primer renglón disponible y continúa hacia abajo.
-      // Si el destino ya tiene contenido, lo reemplaza desde el primer renglón.
-      for (const task of payload.tasks) {
-        if (targetIndex >= maxRows) break;
-        result[targetIndex] = { text: task.text, done: task.done };
-        targetIndex++;
-      }
-
-      window.db[key] = result;
+      window.db[key] = payload.text;
       localStorage.setItem("weekly_planner_v5_db", JSON.stringify(window.db));
       if (window.saveDayToCloud) window.saveDayToCloud(key);
       renderPlanner();
-
-      const pasted = Math.min(payload.tasks.length, maxRows);
-      setPlannerSyncStatus?.(
-        `📥 ${pasted} renglón${pasted === 1 ? "" : "es"} pegado${pasted === 1 ? "" : "s"}`,
-        "online"
-      );
+      window.setPlannerSyncStatus?.("📥 Día pegado", "online");
       return true;
-    }
-
-
-    function handleKeyDown(
-      e,
-      key,
-      index
-    ) {
-      const list =
-        document.getElementById(
-          `list_${key}`
-        );
-
-      if (!list) return;
-
-      const inputs =
-        list.querySelectorAll(
-          ".task-input"
-        );
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-
-        if (inputs[index + 1]) {
-          inputs[index + 1].focus();
-        }
-
-      } else if (
-        e.key === "Backspace" &&
-        e.target.value === ""
-      ) {
-        if (
-          index > 0 &&
-          inputs[index - 1]
-        ) {
-          e.preventDefault();
-          inputs[index - 1].focus();
-        }
-      }
     }
 
     function changeWeek(direction) {
