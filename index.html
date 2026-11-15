@@ -701,6 +701,168 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="manifest" href="./manifest.json">
+
+  <style>
+    /* ===== Mejoras añadidas: vista de día, calendario, búsqueda, copias ===== */
+    .actions { flex-wrap: wrap; row-gap: 3px; justify-content: flex-end; }
+
+    .planner-grid.day-solo { grid-template-columns: 1fr; }
+    .planner-grid.day-solo { height: 100%; }
+    .planner-grid.day-solo .day-card { height: 100%; min-height: 0; }
+    .planner-grid.day-solo .task-list,
+    .planner-grid.day-solo .is-weekday .task-list,
+    .planner-grid.day-solo .is-weekend .task-list {
+      flex: 1 1 auto;
+      height: auto;
+      min-height: 240px;
+    }
+
+    .day-card.search-hit {
+      border: calc(var(--line-width) + 1px) solid var(--today-border);
+      box-shadow: 0 0 0 2px var(--today-border);
+    }
+
+    .cal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.62);
+      z-index: 110;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 46px 8px 8px;
+    }
+    .cal-overlay.open { display: flex; }
+    .cal-panel {
+      width: min(420px, 96vw);
+      max-height: 86dvh;
+      overflow-y: auto;
+      background: #151515;
+      border: 1px solid #3a3a3a;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: -5px 0 18px rgba(0,0,0,.45);
+    }
+    .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+    .cal-head span { font-weight: 700; font-size: 1rem; }
+    .cal-head button { min-height: 38px; min-width: 44px; justify-content: center; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .cal-dow {
+      font-size: 0.65rem;
+      color: var(--day-name);
+      text-align: center;
+      font-weight: 700;
+      padding: 3px 0;
+      text-transform: uppercase;
+    }
+    .cal-day {
+      position: relative;
+      background: #202020;
+      border: 1px solid #333333;
+      border-radius: 8px;
+      padding: 13px 0 16px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      justify-content: center;
+      min-width: 0;
+      min-height: 44px;
+      color: var(--task-text);
+    }
+    .cal-day.has-content::after {
+      content: "";
+      position: absolute;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--completed-color);
+    }
+    .cal-day.is-today { border-color: var(--today-border); color: var(--today-name); }
+    .cal-blank { background: transparent; border: none; }
+    .cal-foot { display: flex; gap: 6px; margin-top: 10px; }
+    .cal-foot button { flex: 1; justify-content: center; }
+
+    .search-head { display: flex; gap: 6px; margin-bottom: 8px; }
+    .search-head input {
+      flex: 1;
+      min-width: 0;
+      background: #111111;
+      color: #ffffff;
+      border: 1px solid #555555;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+    .search-head button { min-height: 40px; min-width: 42px; justify-content: center; }
+    .search-results { display: flex; flex-direction: column; gap: 6px; }
+    .search-result {
+      text-align: left;
+      background: #202020;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+      color: var(--task-text);
+      display: block;
+      width: 100%;
+      min-height: 44px;
+    }
+    .search-result .sr-date {
+      display: block;
+      font-weight: 700;
+      font-size: 0.75rem;
+      color: var(--today-name);
+      margin-bottom: 3px;
+      text-transform: uppercase;
+    }
+    .search-result .sr-snip { font-size: 0.82rem; color: #cccccc; line-height: 1.35; word-break: break-word; }
+    .search-result mark { background: var(--button-bg); color: #ffffff; border-radius: 3px; padding: 0 2px; }
+    .search-empty { color: #888888; font-size: 0.82rem; padding: 6px 2px; line-height: 1.4; }
+
+    .backup-actions-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 9px; }
+    .backup-actions-row button { justify-content: center; min-height: 40px; }
+    .backup-list-title { font-size: 0.72rem; color: #999999; margin-bottom: 6px; font-weight: 700; }
+    .backup-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: #202020;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      font-size: 0.74rem;
+    }
+    .backup-item button { padding: 8px 10px; font-size: 0.7rem; flex-shrink: 0; min-height: 36px; }
+
+    /* Botones nuevos del encabezado: área táctil cómoda en celular */
+    #viewToggleBtn { min-width: 34px; justify-content: center; }
+
+    /* Celular vertical: encabezado en dos filas para que todos los botones queden visibles */
+    @media (max-width: 640px) {
+      header {
+        height: auto;
+        flex-wrap: wrap;
+        row-gap: 4px;
+        padding: 5px 6px;
+      }
+      .title-area { width: 100%; justify-content: space-between; }
+      .actions { width: 100%; justify-content: center; row-gap: 4px; }
+      .actions button, .actions .sync-badge {
+        padding: 5px 8px;
+        font-size: 0.72rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .cal-day { padding: 15px 0 18px; font-size: 0.92rem; }
+      .cal-panel { padding: 10px; }
+      .cal-foot button, .backup-actions-row button { min-height: 44px; }
+    }
+  </style>
 </head>
 
 <body>
@@ -713,6 +875,9 @@
     </div>
 
     <div class="actions">
+      <button id="viewToggleBtn" class="btn-outline" onclick="toggleDayView()" title="Ver día ampliado">📄</button>
+      <button class="btn-outline" onclick="openCalendarPicker()" title="Ir a una fecha">📅</button>
+      <button class="btn-outline" onclick="openSearch()" title="Buscar actividades">🔍</button>
       <button class="btn-outline" onclick="openSettings()" title="Personalizar">⚙️</button>
       <span id="syncStatus" class="sync-badge">🟡 Validando...</span>
       <button id="authButton" class="btn-auth" onclick="togglePlannerAuth()">Gmail</button>
@@ -823,6 +988,21 @@
         </div>
       </details>
 
+      <details class="settings-section">
+        <summary>🛟 Copias y recuperación</summary>
+        <div class="settings-body">
+          <div class="backup-actions-row">
+            <button type="button" class="btn-outline" onclick="exportFullBackup()">⬇️ Descargar backup completo</button>
+            <button type="button" class="btn-outline" onclick="document.getElementById('fullRestoreInput').click()">📥 Restaurar backup completo</button>
+          </div>
+          <div class="backup-list-title">Copias automáticas locales (restaurar con un toque):</div>
+          <div id="backupList"></div>
+          <div class="settings-hint">
+            Se guardan hasta 10 copias automáticas en este dispositivo (como mínimo una cada 12 horas, solo si hubo cambios). Antes de restaurar o importar se crea siempre una copia de seguridad del contenido actual. El backup completo incluye también el diseño personalizado.
+          </div>
+        </div>
+      </details>
+
       <div class="settings-actions">
         <button onclick="resetSettings()">↩️ Restablecer</button>
         <button class="btn-secondary" onclick="closeSettings()">✓ Cerrar</button>
@@ -841,9 +1021,88 @@
     type="file"
     id="fileInput"
     style="display:none"
-    accept=".json"
+    accept=".json,application/json,text/plain,application/octet-stream"
     onchange="loadJSONFile(event)"
   >
+
+  <!-- Calendario para ir directo a cualquier fecha -->
+  <div id="calendarOverlay" class="cal-overlay" onclick="closeCalendarIfOutside(event)">
+    <div class="cal-panel" onclick="event.stopPropagation()">
+      <div class="cal-head">
+        <button type="button" class="btn-outline" onclick="calShiftMonth(-1)">◀</button>
+        <span id="calTitle"></span>
+        <button type="button" class="btn-outline" onclick="calShiftMonth(1)">▶</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-foot">
+        <button type="button" class="btn-secondary" onclick="calGoToday()">Ir a hoy</button>
+        <button type="button" class="btn-outline" onclick="closeCalendar()">✕ Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Búsqueda de actividades en todos los días y semanas -->
+  <div id="searchOverlay" class="cal-overlay" onclick="closeSearchIfOutside(event)">
+    <div class="cal-panel" onclick="event.stopPropagation()">
+      <div class="search-head">
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="Buscar palabra o frase..."
+          autocomplete="off"
+          enterkeyhint="search"
+          oninput="onSearchInput()"
+        >
+        <button type="button" class="btn-outline" onclick="closeSearch()">✕</button>
+      </div>
+      <div class="search-results" id="searchResults"></div>
+    </div>
+  </div>
+
+  <!-- Entrada para restaurar un backup completo -->
+  <input
+    type="file"
+    id="fullRestoreInput"
+    style="display:none"
+    accept=".json,application/json,text/plain,application/octet-stream"
+    onchange="restoreFullFromFile(event)"
+  >
+
+  <!-- Protección temprana: recupera los datos si el almacenamiento local está corrupto (no modifica funciones existentes) -->
+  <script>
+    (function () {
+      var DB_KEY = "weekly_planner_v5_db";
+      var BACKUP_KEY = "planner_backup_history_v1";
+      try {
+        var raw = localStorage.getItem(DB_KEY);
+        if (raw === null) return; // Arranque limpio
+        var parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return; // Válido
+        throw new Error("formato inesperado");
+      } catch (e) {
+        // Corrupto: intentar recuperar la copia automática más reciente
+        var recovered = null;
+        try {
+          var list = JSON.parse(localStorage.getItem(BACKUP_KEY) || "[]");
+          if (Array.isArray(list)) {
+            for (var i = 0; i < list.length; i++) {
+              var snap = list[i];
+              if (snap && snap.db && typeof snap.db === "object" && !Array.isArray(snap.db)) {
+                recovered = snap.db;
+                break;
+              }
+            }
+          }
+        } catch (e2) {}
+        try {
+          localStorage.setItem(DB_KEY, JSON.stringify(recovered || {}));
+        } catch (e3) {}
+        if (recovered) {
+          console.warn("Datos locales corruptos: se recuperaron desde la copia automática.");
+        }
+      }
+    })();
+  </script>
 
   <script>
     let currentYear = new Date().getFullYear();
@@ -1496,6 +1755,612 @@
     initWeekForCurrentDate();
     renderPlanner();
     window.applyPlannerSettings(window.getPlannerSettings());
+  </script>
+
+  <!-- ============================================================
+       Mejoras añadidas (no modifica funciones existentes ni Firebase):
+       - Alternar semana completa ↔ vista ampliada de un solo día
+       - Calendario para saltar directo a cualquier fecha
+       - Búsqueda global de actividades en todos los días y semanas
+       - Copias de seguridad automáticas + recuperación
+       - Cola de sincronización más robusta entre dispositivos
+       ============================================================ -->
+  <script>
+    (function () {
+      "use strict";
+
+      const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+      const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+      const VIEW_MODE_KEY = "planner_view_mode_v1";
+      const BACKUP_KEY = "planner_backup_history_v1";
+      const PENDING_SYNC_KEY = "planner_pending_sync_v1";
+      const DB_KEY = "weekly_planner_v5_db";
+      const MAX_BACKUPS = 10;
+      const BACKUP_MIN_INTERVAL = 12 * 60 * 60 * 1000; // 12 horas
+
+      // ---------- utilidades ----------
+      function todayKey() {
+        const t = new Date();
+        return formatDateKey(t.getFullYear(), t.getMonth(), t.getDate());
+      }
+
+      function parseKey(key) {
+        const p = String(key).split("-").map(Number);
+        return { y: p[0], m: p[1], d: p[2] };
+      }
+
+      function weekdayIndex(key) { // 0 = Lunes ... 6 = Domingo
+        const p = parseKey(key);
+        const dow = new Date(p.y, p.m - 1, p.d).getDay();
+        return dow === 0 ? 6 : dow - 1;
+      }
+
+      function deepClone(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function readJson(key, fallback) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return fallback;
+          const parsed = JSON.parse(raw);
+          return parsed === null || parsed === undefined ? fallback : parsed;
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      // ---------- vista ampliada de un solo día ----------
+      window.plannerDayView = readJson(VIEW_MODE_KEY, "week") === "day";
+      let dayViewDate = null;
+      let lastFocusedDay = null; // Último día donde estuvo el cursor (donde se escribía)
+
+      // Detecta en qué día está el cursor, sin modificar las funciones existentes.
+      document.addEventListener("focusin", (e) => {
+        const el = e.target;
+        if (el && el.classList && el.classList.contains("day-textarea")) {
+          const holder = el.closest(".task-list");
+          if (holder && holder.id && holder.id.indexOf("list_") === 0) {
+            lastFocusedDay = holder.id.slice(5);
+          }
+        }
+      });
+
+      function ensureDayViewDate() {
+        if (!dayViewDate) dayViewDate = todayKey();
+      }
+
+      function syncWeekContextToDate(key) {
+        const p = parseKey(key);
+        currentYear = p.y;
+        currentMonth = p.m - 1;
+        const weeks = getMonthWeeks(currentYear, currentMonth);
+        let idx = weeks.findIndex(w => w.some(dd => dd.dateKey === key));
+        if (idx < 0) idx = 0;
+        currentWeekIndex = idx;
+      }
+
+      function updateViewToggle() {
+        const btn = document.getElementById("viewToggleBtn");
+        if (!btn) return;
+        btn.innerText = window.plannerDayView ? "🗓️" : "📄";
+        btn.title = window.plannerDayView ? "Ver semana completa" : "Ver día ampliado";
+      }
+
+      function renderDayView() {
+        ensureDayViewDate();
+        const p = parseKey(dayViewDate);
+        const idx = weekdayIndex(dayViewDate);
+        const grid = document.getElementById("plannerGrid");
+        grid.innerHTML = "";
+        grid.classList.add("day-solo");
+        grid.appendChild(createDayCard(
+          { dateKey: dayViewDate, dayNumber: p.d, inMonth: true, dayIndex: idx },
+          DAY_NAMES[idx],
+          idx >= 5,
+          idx === 6
+        ));
+        document.getElementById("weekTitle").innerText =
+          `${DAY_NAMES[idx]} ${p.d} de ${MONTH_NAMES[p.m - 1]} ${p.y}`;
+        updateViewToggle();
+      }
+
+      window.toggleDayView = function () {
+        window.plannerDayView = !window.plannerDayView;
+        try { localStorage.setItem(VIEW_MODE_KEY, window.plannerDayView ? "day" : "week"); } catch (e) {}
+        if (window.plannerDayView) {
+          const weeks = getMonthWeeks(currentYear, currentMonth);
+          const week = weeks[currentWeekIndex] || [];
+          // 1) El día donde estaba el cursor / última escritura (si pertenece a la semana vista)
+          const cursorIn = lastFocusedDay
+            ? week.find(dd => dd.dateKey === lastFocusedDay && dd.inMonth)
+            : null;
+          // 2) Hoy, si está en la semana vista
+          const tk = todayKey();
+          const todayIn = week.find(dd => dd.dateKey === tk && dd.inMonth);
+          // 3) El primer día del mes visible en esa semana
+          const firstInMonth = week.find(dd => dd.inMonth);
+          dayViewDate = (cursorIn || todayIn || firstInMonth || { dateKey: tk }).dateKey;
+        } else if (dayViewDate) {
+          // Al volver a vista semana: muestra la semana de ese día.
+          syncWeekContextToDate(dayViewDate);
+        }
+        window.renderPlanner();
+      };
+
+      // Envuelve renderPlanner para respetar la vista activa sin alterar la original.
+      const originalRenderPlanner = window.renderPlanner;
+      window.renderPlanner = function () {
+        const grid = document.getElementById("plannerGrid");
+        if (window.plannerDayView) {
+          renderDayView();
+          return;
+        }
+        if (grid) grid.classList.remove("day-solo");
+        originalRenderPlanner();
+      };
+
+      // En vista día, las flechas y el deslizar cambian de día.
+      const originalChangeWeek = window.changeWeek;
+      window.changeWeek = function (direction) {
+        if (!window.plannerDayView) {
+          originalChangeWeek(direction);
+          return;
+        }
+        ensureDayViewDate();
+        const p = parseKey(dayViewDate);
+        const dt = new Date(p.y, p.m - 1, p.d + Number(direction || 0));
+        currentYear = dt.getFullYear();
+        currentMonth = dt.getMonth();
+        dayViewDate = formatDateKey(currentYear, currentMonth, dt.getDate());
+        renderDayView();
+      };
+
+      const originalGoToday = window.goToday;
+      window.goToday = function () {
+        dayViewDate = todayKey();
+        originalGoToday();
+        updateViewToggle();
+      };
+
+      // ---------- salto directo a una fecha (calendario) ----------
+      let calYear = currentYear;
+      let calMonth = currentMonth;
+
+      window.openCalendarPicker = function () {
+        if (window.plannerDayView) {
+          ensureDayViewDate();
+          const p = parseKey(dayViewDate);
+          calYear = p.y;
+          calMonth = p.m - 1;
+        } else {
+          calYear = currentYear;
+          calMonth = currentMonth;
+        }
+        document.getElementById("calendarOverlay").classList.add("open");
+        renderCalendar();
+      };
+
+      window.closeCalendar = function () {
+        document.getElementById("calendarOverlay").classList.remove("open");
+      };
+
+      window.closeCalendarIfOutside = function (event) {
+        if (event.target.id === "calendarOverlay") window.closeCalendar();
+      };
+
+      window.calShiftMonth = function (direction) {
+        calMonth += Number(direction || 0);
+        if (calMonth < 0) { calMonth = 11; calYear--; }
+        if (calMonth > 11) { calMonth = 0; calYear++; }
+        renderCalendar();
+      };
+
+      window.calGoToday = function () {
+        jumpToSpecificDay(todayKey());
+        window.closeCalendar();
+      };
+
+      // El calendario siempre lleva al día seleccionado, en vista ampliada.
+      function jumpToSpecificDay(dateKey, highlight) {
+        window.plannerDayView = true;
+        try { localStorage.setItem(VIEW_MODE_KEY, "day"); } catch (e) {}
+        jumpToDate(dateKey, highlight);
+      }
+
+      function renderCalendar() {
+        document.getElementById("calTitle").innerText = `${MONTH_NAMES[calMonth]} ${calYear}`;
+        const grid = document.getElementById("calGrid");
+        grid.innerHTML = "";
+
+        ["L", "M", "X", "J", "V", "S", "D"].forEach(d => {
+          const cell = document.createElement("span");
+          cell.className = "cal-dow";
+          cell.innerText = d;
+          grid.appendChild(cell);
+        });
+
+        const firstDow = new Date(calYear, calMonth, 1).getDay(); // 0 = domingo
+        const offset = firstDow === 0 ? 6 : firstDow - 1;
+        for (let i = 0; i < offset; i++) {
+          const blank = document.createElement("span");
+          blank.className = "cal-blank";
+          grid.appendChild(blank);
+        }
+
+        const lastDay = new Date(calYear, calMonth + 1, 0).getDate();
+        const tk = todayKey();
+        for (let d = 1; d <= lastDay; d++) {
+          const key = formatDateKey(calYear, calMonth, d);
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "cal-day";
+          if (key === tk) btn.classList.add("is-today");
+          if (String(getDayText(key) || "").trim()) btn.classList.add("has-content");
+          btn.innerText = d;
+          btn.title = "Ir a " + key;
+          btn.onclick = () => {
+            jumpToSpecificDay(key);
+            window.closeCalendar();
+          };
+          grid.appendChild(btn);
+        }
+      }
+
+      // ---------- búsqueda global de actividades ----------
+      let searchTimer = null;
+
+      window.openSearch = function () {
+        document.getElementById("searchOverlay").classList.add("open");
+        const input = document.getElementById("searchInput");
+        input.value = "";
+        renderSearchResults("");
+        setTimeout(() => input.focus(), 60);
+      };
+
+      window.closeSearch = function () {
+        document.getElementById("searchOverlay").classList.remove("open");
+      };
+
+      window.closeSearchIfOutside = function (event) {
+        if (event.target.id === "searchOverlay") window.closeSearch();
+      };
+
+      window.onSearchInput = function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          renderSearchResults(document.getElementById("searchInput").value);
+        }, 180);
+      };
+
+      window.jumpToResult = function (key) {
+        window.closeSearch();
+        jumpToDate(key, true);
+      };
+
+      function renderSearchResults(query) {
+        const box = document.getElementById("searchResults");
+        const q = String(query || "").trim().toLowerCase();
+        box.innerHTML = "";
+
+        if (!q) {
+          box.innerHTML = `<div class="search-empty">Escribí una palabra o frase para buscar en todos los días y semanas.</div>`;
+          return;
+        }
+
+        const results = [];
+        const keys = Object.keys(window.db || {}).sort();
+        keys.forEach(key => {
+          const text = String(getDayText(key) || "");
+          const pos = text.toLowerCase().indexOf(q);
+          if (pos < 0) return;
+          results.push({ key, text, pos });
+        });
+
+        if (!results.length) {
+          box.innerHTML = `<div class="search-empty">Sin resultados para "${escapeHtml(query)}".</div>`;
+          return;
+        }
+
+        const MAX = 300;
+        results.slice(0, MAX).forEach(r => {
+          const p = parseKey(r.key);
+          const idx = weekdayIndex(r.key);
+          const start = Math.max(0, r.pos - 45);
+          const before = r.text.slice(start, r.pos);
+          const match = r.text.slice(r.pos, r.pos + q.length);
+          const afterEnd = r.pos + q.length + 90;
+          const after = r.text.slice(r.pos + q.length, afterEnd);
+
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "search-result";
+          item.innerHTML = `
+            <span class="sr-date">${DAY_NAMES[idx]} ${p.d}/${p.m}/${p.y}</span>
+            <span class="sr-snip">${start > 0 ? "…" : ""}${escapeHtml(before)}<mark>${escapeHtml(match)}</mark>${escapeHtml(after)}${afterEnd < r.text.length ? "…" : ""}</span>
+          `;
+          item.onclick = () => window.jumpToResult(r.key);
+          box.appendChild(item);
+        });
+
+        if (results.length > MAX) {
+          const more = document.createElement("div");
+          more.className = "search-empty";
+          more.innerText = `…y ${results.length - MAX} resultados más. Refiná la búsqueda para verlos.`;
+          box.appendChild(more);
+        }
+      }
+
+      function jumpToDate(dateKey, highlight) {
+        const p = parseKey(dateKey);
+        currentYear = p.y;
+        currentMonth = p.m - 1;
+        if (window.plannerDayView) {
+          dayViewDate = dateKey;
+        } else {
+          const weeks = getMonthWeeks(currentYear, currentMonth);
+          let idx = weeks.findIndex(w => w.some(dd => dd.dateKey === dateKey && dd.inMonth));
+          if (idx < 0) idx = 0;
+          currentWeekIndex = idx;
+        }
+        window.renderPlanner();
+        if (highlight) {
+          requestAnimationFrame(() => {
+            const listEl = document.getElementById("list_" + dateKey);
+            const card = listEl && listEl.closest(".day-card");
+            if (card) {
+              card.scrollIntoView({ behavior: "smooth", block: "center" });
+              card.classList.add("search-hit");
+              setTimeout(() => card.classList.remove("search-hit"), 3500);
+            }
+          });
+        }
+      }
+
+      // ---------- copias de seguridad y recuperación ----------
+      function readBackups() {
+        const list = readJson(BACKUP_KEY, []);
+        return Array.isArray(list) ? list : [];
+      }
+
+      function writeBackups(list) {
+        try {
+          localStorage.setItem(BACKUP_KEY, JSON.stringify(list.slice(0, MAX_BACKUPS)));
+        } catch (e) {
+          console.warn("Copias: no se pudo guardar el historial:", e);
+        }
+      }
+
+      function createBackup(force) {
+        try {
+          const list = readBackups();
+          const current = deepClone(window.db || {});
+          const last = list[0];
+          if (last && JSON.stringify(last.db) === JSON.stringify(current)) return false;
+          if (!force && last && Date.now() - (last.ts || 0) < BACKUP_MIN_INTERVAL) return false;
+          list.unshift({ ts: Date.now(), db: current });
+          writeBackups(list);
+          return true;
+        } catch (e) {
+          console.warn("Copias: error al crear copia:", e);
+          return false;
+        }
+      }
+
+      function restoreDbFromData(newDb, label) {
+        createBackup(true); // Copia del estado actual antes de reemplazar
+        window.db = deepClone(newDb);
+        try { localStorage.setItem(DB_KEY, JSON.stringify(window.db)); } catch (e) {}
+        Object.keys(window.db).forEach(key => {
+          if (window.saveDayToCloud) window.saveDayToCloud(key);
+        });
+        window.renderPlanner();
+        if (window.setPlannerSyncStatus) window.setPlannerSyncStatus("🛟 " + label, "online");
+      }
+
+      window.restoreBackupSnapshot = function (index) {
+        const list = readBackups();
+        const snap = list[index];
+        if (!snap || !snap.db) return;
+        const fecha = new Date(snap.ts).toLocaleString();
+        if (!confirm(`¿Restaurar la copia automática del ${fecha}?\n\nSe reemplazará todo el contenido actual (antes se guarda una copia de seguridad).`)) return;
+        restoreDbFromData(snap.db, "Copia restaurada");
+        refreshBackupList();
+      };
+
+      function refreshBackupList() {
+        const box = document.getElementById("backupList");
+        if (!box) return;
+        const list = readBackups();
+        box.innerHTML = "";
+        if (!list.length) {
+          box.innerHTML = `<div class="search-empty">Todavía no hay copias automáticas. Se crearán solas mientras usás el planificador.</div>`;
+          return;
+        }
+        list.forEach((snap, i) => {
+          if (!snap || !snap.db) return;
+          const row = document.createElement("div");
+          row.className = "backup-item";
+          const span = document.createElement("span");
+          span.innerText = `${new Date(snap.ts).toLocaleString()} · ${Object.keys(snap.db).length} día(s)`;
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn-outline";
+          btn.innerText = "Restaurar";
+          btn.onclick = () => window.restoreBackupSnapshot(i);
+          row.appendChild(span);
+          row.appendChild(btn);
+          box.appendChild(row);
+        });
+      }
+
+      window.exportFullBackup = function () {
+        const payload = {
+          type: "planificador-backup-completo-v1",
+          ts: new Date().toISOString(),
+          db: window.db || {},
+          settings: window.getPlannerSettings ? window.getPlannerSettings() : {}
+        };
+        const t = new Date();
+        const stamp =
+          formatDateKey(t.getFullYear(), t.getMonth(), t.getDate()) +
+          "_" + String(t.getHours()).padStart(2, "0") + String(t.getMinutes()).padStart(2, "0");
+        const a = document.createElement("a");
+        a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+        a.download = `planificador_backup_completo_${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        if (window.setPlannerSyncStatus) window.setPlannerSyncStatus("💾 Backup completo descargado", "online");
+      };
+
+      window.restoreFullFromFile = function (event) {
+        const file = event.target.files[0];
+        event.target.value = "";
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            const parsed = JSON.parse(e.target.result);
+            let newDb = null;
+            let newSettings = null;
+            if (parsed && parsed.type === "planificador-backup-completo-v1" && parsed.db && typeof parsed.db === "object") {
+              newDb = parsed.db;
+              newSettings = parsed.settings || null;
+            } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              newDb = parsed;
+            }
+            if (!newDb) {
+              alert("Archivo de copia no válido.");
+              return;
+            }
+            if (!confirm("¿Restaurar este backup completo?\n\nSe reemplazará todo el contenido actual (antes se guarda una copia de seguridad).")) return;
+            if (newSettings && window.applyPlannerSettings) window.applyPlannerSettings(newSettings);
+            restoreDbFromData(newDb, "Backup completo restaurado");
+            alert("Backup restaurado con éxito.");
+          } catch (err) {
+            console.error(err);
+            alert("Archivo de copia no válido.");
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      // Refresca la lista de copias al abrir el panel de Personalizar.
+      const originalOpenSettings = window.openSettings;
+      window.openSettings = function () {
+        originalOpenSettings();
+        refreshBackupList();
+      };
+
+      // Copia de seguridad del estado actual antes de importar con 📂 Cargar.
+      const originalLoadJSONFile = window.loadJSONFile;
+      window.loadJSONFile = function (event) {
+        createBackup(true);
+        originalLoadJSONFile(event);
+      };
+
+      // ---------- sincronización más robusta (cola con reintentos) ----------
+      const pendingSync = new Set((() => {
+        const a = readJson(PENDING_SYNC_KEY, []);
+        return Array.isArray(a) ? a.filter(k => typeof k === "string") : [];
+      })());
+
+      function persistPendingSync() {
+        try { localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify([...pendingSync])); } catch (e) {}
+      }
+
+      let realSaveDayToCloud = window.saveDayToCloud;
+      let lastFlushTs = 0;
+
+      function statusHas(cls) {
+        const el = document.getElementById("syncStatus");
+        return !!(el && el.classList.contains(cls));
+      }
+
+      function wrappedSaveDayToCloud(key) {
+        pendingSync.add(key);
+        persistPendingSync();
+        try { realSaveDayToCloud(key); } catch (e) { console.warn("Sync:", e); }
+        scheduleDeliveryCheck(key, 0);
+      }
+
+      // Intercepta las asignaciones que hace el módulo de Firebase sin tocarlo:
+      // cuando Firebase reconecta, la cola sigue funcionando con el guardado real.
+      Object.defineProperty(window, "saveDayToCloud", {
+        configurable: true,
+        get() { return wrappedSaveDayToCloud; },
+        set(value) { realSaveDayToCloud = value; }
+      });
+
+      function scheduleDeliveryCheck(key, attempt) {
+        setTimeout(() => {
+          if (!pendingSync.has(key)) return;
+          if (statusHas("online")) {
+            pendingSync.delete(key);
+            persistPendingSync();
+            return;
+          }
+          const delay = attempt < 4 ? 15000 : 60000;
+          setTimeout(() => {
+            if (!pendingSync.has(key)) return;
+            try { realSaveDayToCloud(key); } catch (e) {}
+            scheduleDeliveryCheck(key, attempt + 1);
+          }, delay);
+        }, 4000);
+      }
+
+      function flushPendingSync() {
+        if (!pendingSync.size) return;
+        const now = Date.now();
+        if (now - lastFlushTs < 15000) return; // Evita ciclos de guardado innecesarios
+        lastFlushTs = now;
+        pendingSync.forEach(key => {
+          try { realSaveDayToCloud(key); } catch (e) {}
+        });
+      }
+
+      // Al volver la conexión, reenvía lo que quedó pendiente.
+      const statusEl = document.getElementById("syncStatus");
+      if (statusEl && "MutationObserver" in window) {
+        let flushTimer = null;
+        new MutationObserver(() => {
+          if (!statusHas("online") || !pendingSync.size) return;
+          clearTimeout(flushTimer);
+          flushTimer = setTimeout(flushPendingSync, 1500);
+        }).observe(statusEl, { attributes: true, attributeFilter: ["class"] });
+      }
+      window.addEventListener("online", flushPendingSync);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) flushPendingSync();
+      });
+      window.addEventListener("beforeunload", () => {
+        if (!pendingSync.size) return;
+        pendingSync.forEach(key => {
+          try { realSaveDayToCloud(key); } catch (e) {}
+        });
+      });
+      // Reintenta lo pendiente apenas arranca (por ejemplo, si se cerró sin conexión).
+      setTimeout(flushPendingSync, 6000);
+
+      // ---------- cierre con la tecla Escape ----------
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          window.closeSearch();
+          window.closeCalendar();
+        }
+      });
+
+      // ---------- arranque ----------
+      updateViewToggle();
+      if (window.plannerDayView) {
+        // Si la app se cerró en vista día, respétala al abrir.
+        renderDayView();
+      }
+      // Primera copia automática (respeta el mínimo de 12 horas entre copias).
+      setTimeout(() => createBackup(false), 3000);
+    })();
   </script>
 
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(e=>console.warn("PWA SW:",e)));}</script>
